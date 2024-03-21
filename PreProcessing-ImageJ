@@ -1,0 +1,172 @@
+// Javascript meant to run on ImageJ
+// Author: Eric Payson
+//Capstone Image Adjustment Code, UCLA, Under Prof. Kamariza
+
+//ADJUSTMENTS
+
+//first time adjusting?
+#@ String (choices={"Pick Parameters", "Save Files"}, style="listBox") choice1
+#@ String (choices={"Save all", "JPEG Only", "TIFF Only"}, style="listBox") choice2
+//Choosing YES is for first time making adjustment
+//Choosing NO is for set parameters, will run and save images
+
+
+
+stack_number = 32; //adjust stack number, most experiemnts are 32
+
+//ADJUST IMAGE PARAMETERS HERE
+
+GFP_low = 250;
+GFP_high = 800;
+
+CFP_low = 200;
+CFP_high = 624;
+
+BF_low = 25133;
+BF_high = 32009;
+
+// Specify input and output folders for each file type
+dir1 = getDirectory("Input dir");
+if(choice1 == "Save Files"  && choice2 == "JPEG Only") {dir2 = getDirectory("JPEG Output dir");}
+if (choice1 == "Save Files" && (choice2 == "Save all" || choice2 == "TIFF Only")) {
+	
+	if(choice2 != "TIFF Only") {dir2 = getDirectory("JPEG Output dir");}
+	dir3 = getDirectory("TIFF Unstacked dir");
+	dir4 = getDirectory("Tiff Stacked dir");}
+
+
+Filelist = getFileList(dir1);
+//setBatchMode(true);
+
+channel_stack = stack_number/4;
+// Loop start
+for (i=0; i<Filelist.length; i++) {
+showProgress(i+1, Filelist.length);
+open(dir1+Filelist[i]);
+name = getTitle();
+
+//extract the zoom magnification and create scale bar based on zoom
+start_zoom = indexOf(name, "0X");
+zoom_number_string = substring(name, start_zoom-1, start_zoom + 1);
+zoom_number = parseFloat(zoom_number_string);
+
+if(zoom_number == 40){ scale_size = 50; font_size = 100;}
+if(zoom_number == 20){scale_size = 100; font_size = 100;}
+if(zoom_number == 60) {scale_size = 20; font_size = 100;}
+
+// INSERT MACRO HERE
+
+	run("Make Substack...", "slices=1-32-4");
+	selectWindow(name);
+	run("Make Substack...", "slices=2-32-4");
+	selectWindow(name);
+	run("Make Substack...", "slices=3-32-4");
+	selectWindow(name);
+	
+	Windowlist = getList("image.titles");
+	
+
+		
+		//BF
+			selectImage("Substack (1-" +stack_number+"-4)");
+			run("Z Project...", "projection=[Average Intensity]");
+			run("Enhance Contrast", "saturated=0.35");
+			
+			start_sample = indexOf(name, "Well");
+			sample_string = substring(name, start_sample+4, start_sample + 5);
+			Well_string = substring(name, start_sample+4, start_sample + 6);
+			print(Well_string);
+
+			
+			if(choice1 == "Save Files") {
+				
+				if(sample_string == "E") // add a scale bar numerical number only for our control sample
+				{
+					
+					run("Scale Bar...", "width=50 height=10 thickness=50 font=100 hide overlay");
+					waitForUser("Check");
+					if(choice2 != "TIFF Only"){saveAs("jpg", dir2+name+"_BF");}
+					
+				}
+				else{
+				
+					run("Scale Bar...", "width=50 height=10 thickness=50 font=100 hide overlay");
+					waitForUser("Check");
+					if(choice2 != "TIFF Only") {saveAs("jpg", dir2+name+"_BF");}
+					
+				}
+			}
+	
+		
+		//CFP
+			selectImage("Substack (2-" +stack_number+"-4)");
+			setMinAndMax(CFP_low, CFP_high);
+			run("Z Project...", "projection=[Average Intensity]");
+			run("Subtract Background...","rolling=9 sliding disable stack");
+			run("Cyan");
+			
+			if(choice1 == "Pick Parameters") {waitForUser("check");}
+			else{
+			
+			run("Scale Bar...", "width=50 height=10 thickness=50 font=100 hide overlay");
+			if(choice2 != "TIFF Only") {saveAs("jpg", dir2+name+"_CFP");}
+		
+			}
+		
+		//GFP
+			selectImage("Substack (3-" +stack_number+"-4)");
+			run("Z Project...", "projection=[Average Intensity]");
+			run("Subtract Background...","rolling=3 sliding disable stack");
+			//waitForUser("check");
+			setMinAndMax(GFP_low, GFP_high);
+			run("Green");
+			
+		if(choice1 == "Pick Parameters") {waitForUser("check");}
+		else{
+			
+			run("Scale Bar...", "width=50 height=10 thickness=50 font=100 hide overlay");
+			if( choice2 != "TIFF Only") {saveAs("jpg", dir2+name+"_GFP");}
+		}
+		
+		//Overlay
+			
+			run("Merge Channels...", "c2=[AVG_Substack (3-32-4)] c4=[AVG_Substack (1-32-4)] create");
+			run("Scale Bar...", "width=50 height=10 thickness=50 font=100 hide overlay");
+			
+		if(choice1 == "Pick Parameters") {waitForUser("check");}
+		else{
+			if (choice2 != "TIFF Only") {saveAs("jpg", dir2+name+"_OVERLAY");}
+			if(choice2 == "Save all") {saveAs("Tiff", dir4+name+"_OVERLAY"); }
+		}
+			
+		//save Unstacked and processed Stacked TIFF images, dir3 and dir4
+		if((choice2 == "Save all" || choice2 == "TIFF Only") && choice1 == "Save Files")
+		{
+			selectImage("Substack (1-" +stack_number+"-4)");
+			saveAs("Tiff", dir3+name+"_unstacked_BF");
+			run("Z Project...", "projection=[Average Intensity]");
+			setMinAndMax(BF_low, BF_high);
+			saveAs("Tiff", dir4+name+"_stacked_BF");
+			
+			selectImage("Substack (2-" +stack_number+"-4)");
+			saveAs("Tiff", dir3+name+"_unstacked_CFP");
+			run("Z Project...", "projection=[Average Intensity]");
+			setMinAndMax(CFP_low, CFP_high);
+			saveAs("Tiff", dir4+name+"_stacked_CFP");
+			
+			selectImage("Substack (3-" +stack_number+"-4)");
+			saveAs("Tiff", dir3+name+"_unstacked_GFP");
+			run("Z Project...", "projection=[Average Intensity]");
+			setMinAndMax(GFP_low, GFP_high);
+			saveAs("Tiff", dir4+name+"_stacked_GFP");
+		}
+			
+			
+			
+
+		
+
+		run("Close All");
+}
+
+	
